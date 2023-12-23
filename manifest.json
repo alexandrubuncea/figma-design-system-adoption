@@ -1,5 +1,5 @@
 {
-  "name": "System Score",
+  "name": "Design System Adoption",
   "id": "00000000",
   "api": "1.0.0",
   "main": "dist/code.js",
@@ -9,7 +9,7 @@
   "relaunchButtons": [
     {
       "command": "open",
-      "name": "Open System Score"
+      "name": "Open Design System Adoption"
     }
   ]
 }

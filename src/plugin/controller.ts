@@ -1,11 +1,11 @@
 figma.showUI(__html__, {
-  title: 'System Score',
+  title: 'Design System Adoption',
   themeColors: true,
   width: 400,
   height: 600,
 });
 
-import config from './config-keys.ts';
+import config from './config-keys';
 
 // Relaunch
 figma.root.setRelaunchData({ open: '' });
