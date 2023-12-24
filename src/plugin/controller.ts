@@ -19,7 +19,7 @@ let components;
 let styles;
 let libraries = [];
 
-// Fetch components
+// // Fetch components
 
 async function fetchAllComponents(figmaFileId: string, url: string, allComponents: any[] = []) {
   const response = await fetch(url, {
@@ -29,8 +29,6 @@ async function fetchAllComponents(figmaFileId: string, url: string, allComponent
     },
   });
   const json = await response.json();
-
-  console.log('Components:', json);
 
   // Check if the response has a 'meta' property and 'components' within it
   if (json.meta && json.meta.components) {
@@ -44,7 +42,7 @@ async function fetchAllComponents(figmaFileId: string, url: string, allComponent
   return allComponents;
 }
 
-async function fetchAllStyles(foundationsFileId: string, url: string, allStyles: any[] = []) {
+async function fetchAllStyles(figmaFileId: string, url: string, allStyles: any[] = []) {
   console.log('Fetching from URL:', url);
 
   const response = await fetch(url, {
@@ -75,7 +73,7 @@ async function fetchAllStyles(foundationsFileId: string, url: string, allStyles:
   return allStyles;
 }
 
-async function fetchAllComponentsAndLayers(figmaFileId: string) {
+async function fetchFileData(figmaFileId: string) {
   const url = `https://api.figma.com/v1/files/${figmaFileId}`;
 
   const response = await fetch(url, {
@@ -87,25 +85,66 @@ async function fetchAllComponentsAndLayers(figmaFileId: string) {
 
   const json = await response.json();
 
-  console.log('Components and Layers:', json);
-
   return json;
 }
 
-fetchAllComponentsAndLayers(figmaFileId);
+fetchFileData(figmaFileId)
+  .then((json) => {
+    // Extract components and styles from the JSON
+    const componentsInFile = Object.values(json.components || {}).filter((component) => !component.remote);
+    const stylesInFile = Object.values(json.styles || {}).filter((style) => !style.remote);
 
-// Fetch components and styles
-Promise.all([
-  fetchAllComponents(figmaFileId, `https://api.figma.com/v1/files/${figmaFileId}/components?page_size=100000`),
-  fetchAllStyles(foundationsFileId, `https://api.figma.com/v1/files/${foundationsFileId}/styles?page_size=100000`),
-])
-  .then(([fetchedComponents, fetchedStyles]) => {
-    // Update the components and styles
-    components = fetchedComponents;
-    styles = fetchedStyles;
+    console.log('JSON:', json);
+    console.log('Components in file:', componentsInFile);
+    console.log('Styles in file:', stylesInFile);
 
-    // Add the fetched components and styles to the libraries
-    libraries.push(fetchedComponents, fetchedStyles);
+    const fetchPromises = [];
+
+    // If there are components, fetch them
+    if (componentsInFile && componentsInFile.length > 0) {
+      console.log('About to fetch components');
+      fetchPromises.push(
+        fetchAllComponents(
+          figmaFileId,
+          `https://api.figma.com/v1/files/${figmaFileId}/components?page_size=100000`
+        ).then((components) => {
+          console.log('Fetched components:', components);
+          return components;
+        })
+      );
+    }
+
+    // If there are styles, fetch them
+    if (stylesInFile && stylesInFile.length > 0) {
+      console.log('About to fetch styles');
+      fetchPromises.push(
+        fetchAllStyles(figmaFileId, `https://api.figma.com/v1/files/${figmaFileId}/styles?page_size=100000`).then(
+          (styles) => {
+            console.log('Fetched styles:', styles);
+            return styles;
+          }
+        )
+      );
+    }
+
+    return Promise.all(fetchPromises);
+  })
+  .then(([allComponents, allStyles]) => {
+    // Add the fetched components to the libraries
+    if (allComponents) {
+      components = allComponents;
+      libraries.push(allComponents);
+      console.log('All Components:', allComponents);
+    }
+
+    // Add the fetched styles to the libraries
+    if (allStyles) {
+      styles = allStyles;
+      libraries.push(allStyles);
+      console.log('All Styles:', allStyles);
+    }
+
+    console.log('Libraries:', libraries);
 
     // Log a message to the console
     console.log('About to send fetched message');
@@ -121,6 +160,34 @@ Promise.all([
     // Send an error message to the UI
     figma.ui.postMessage({ type: 'error', message: 'Error fetching components and styles.' });
   });
+
+// // Fetch components and styles
+// Promise.all([
+//   fetchAllComponents(figmaFileId, `https://api.figma.com/v1/files/${figmaFileId}/components?page_size=100000`),
+//   fetchAllStyles(foundationsFileId, `https://api.figma.com/v1/files/${foundationsFileId}/styles?page_size=100000`),
+// ])
+//   .then(([fetchedComponents, fetchedStyles]) => {
+//     // Update the components and styles
+//     components = fetchedComponents;
+//     styles = fetchedStyles;
+
+//     // Add the fetched components and styles to the libraries
+//     libraries.push(fetchedComponents, fetchedStyles);
+
+//     // Log a message to the console
+//     console.log('About to send fetched message');
+
+//     // Send a message to the UI
+//     figma.ui.postMessage({ type: 'fetched', message: 'Components and styles fetched successfully.' });
+
+//     return { components, styles, libraries };
+//   })
+//   .catch((error) => {
+//     console.error('Error fetching components and styles:', error);
+
+//     // Send an error message to the UI
+//     figma.ui.postMessage({ type: 'error', message: 'Error fetching components and styles.' });
+//   });
 
 // Getting all the nodes within a selection
 function getNodes(nodes: readonly SceneNode[]): SceneNode[] {
@@ -174,7 +241,7 @@ function getNodes(nodes: readonly SceneNode[]): SceneNode[] {
 //   });
 // }
 
-function getNodeData(nodes, parentMainComponentKey = null) {
+function getNodeData(nodes) {
   return nodes.flatMap((node) => {
     let fillStyleKey = null;
     let textStyleKey = null;
@@ -309,66 +376,3 @@ figma.ui.onmessage = (message) => {
     checkSelection();
   }
 };
-// figma.on('selectionchange', async () => {
-//   // Get all nodes in the current selection
-//   const allNodes = figma.currentPage.selection.flatMap((node) => [node, ...node.findAll()]);
-
-//   // Get all visible nodes
-//   const visibleNodes = figma.currentPage.selection.filter((node) => node.visible);
-//   const visibleFillStyles = figma.currentPage.selection.filter((node) => node.fillStyleId !== '');
-//   const visibleStrokeStyles = figma.currentPage.selection.filter((node) => node.strokeStyleId !== '');
-//   const visibleTextStyles = figma.currentPage.selection.filter((node) => node.textStyleId !== '');
-
-//   let fromLibraryCount = 0;
-//   let fromOtherLibrariesCount = 0;
-//   let textNodesWithMatchingStyleCount = 0;
-
-//   // Iterate over all nodes
-//   for (const node of visibleNodes) {
-//     // Get the source of the node
-//     const nodeSource = node.mainComponent;
-
-//     // Get the key of the node source
-//     const nodeSourceKey = nodeSource ? nodeSource.key : null;
-
-//     // Count how many nodes come from the library
-//     if (nodeSourceKey) {
-//       const nodesFromLibrary = components.filter((component) => component.key === nodeSourceKey);
-//       const nodesFromLibraryCount = nodesFromLibrary.length;
-
-//       if (nodesFromLibraryCount > 0) {
-//         fromLibraryCount++;
-//       } else {
-//         fromOtherLibrariesCount++;
-//       }
-//     }
-
-//     // // Get all the used styles in all the visible nodes
-//     // const nodeFillStyleId = node.fillStyleId;
-//     // const nodeStrokeStyleId = node.strokeStyleId;
-//     // const nodeTextStyleId = node.textStyleId;
-
-//     // // Check the keys of the used styles against the keys of the styles in the library
-//     // const matchingFillStyles = styles.filter((style) => style.key === nodeFillStyleId);
-//   }
-
-//   console.log('From the library: ' + fromLibraryCount);
-//   console.log('From other libraries: ' + fromOtherLibrariesCount);
-//   console.log('Text nodes with matching style: ' + textNodesWithMatchingStyleCount);
-//   console.log('Total nodes: ' + visibleNodes.length);
-
-//   // Calculate the score
-//   let score = 0;
-//   if (allNodes.length > 0) {
-//     score = (fromLibraryCount / allNodes.length) * 100;
-//   }
-//   console.log('Score: ' + score.toFixed(2) + '%');
-
-//   // Send a message to the UI with the score and counts
-//   figma.ui.postMessage({
-//     type: 'update-counts',
-//     score: score.toFixed(2),
-//     fromLibraryCount,
-//     fromOtherLibrariesCount,
-//   });
-// });
